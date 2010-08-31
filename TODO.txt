@@ -1,0 +1,9 @@
+Refactor
+Multithread - loading of e.g. EXIF data, checksum calculations and other
+Check if anything has changed locally before querying online
+Write script to rename files based on directory names sorted ascending by exif date
+Use properties in classes
+Chmod on .picasa-sync file
+Make it configureable whether we want to detect renaming of files
+Store filename modification
+Check album modification date to determine if anything changed.
