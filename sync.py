@@ -170,7 +170,7 @@ class Album(object):
 
         self.synced_photos_by_filename_map = dict([(filename, gphoto_id) for gphoto_id, (filename, checksum) in self.synced_photos_by_id_map.iteritems()])
         self.album_datetime = datetime.datetime.now()
-        self._load_file_data_list()
+        self.file_data_list = []
         self.online_album = None
             
     def _load_file_data_list(self):
@@ -206,9 +206,6 @@ class Album(object):
         # If no files then we set the album time to the current time.
         if len(self.file_data_list) == 0:
             self.album_datetime = datetime.datetime.now
-    
-    def num_files_in_album(self):
-        return len(self.file_data_list)
     
     def _save_picasa_sync_config(self):
         with open(self.picasa_sync_config_filename, 'w') as f:
@@ -353,9 +350,16 @@ class Album(object):
         self._save_picasa_sync_config()
         
     def update_online_album(self, ps_client):
-        self._create_or_update_online_album(ps_client)
-        if self.online_album:
-            self._create_or_update_online_files(ps_client)
+        if len(self.file_data_list) == 0:
+            self._load_file_data_list()
+        
+        if len(self.file_data_list) == 0:
+            self._create_or_update_online_album(ps_client)
+            if self.online_album:
+                self._create_or_update_online_files(ps_client)
+                return True
+
+        return False
         
 def main(argv):
     if socket.gethostname() == 'DiskStation':
@@ -409,10 +413,6 @@ def main(argv):
                 local_album_title = m.group(1)              
                     
             album = Album(directory, local_album_title, include_files, exclude_dirs)
-
-            # Skip folders with no filles.
-            if album.num_files_in_album() == 0:
-                continue
             
             # Set the online album if it exists.
             if album.synced_album_gphoto_id in id_to_online_album_map:
