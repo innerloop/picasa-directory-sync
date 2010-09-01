@@ -278,7 +278,7 @@ class Album(object):
                 self.synced_photos_by_filename_map[filename] = photo.gphoto_id.text
                 self._save_picasa_sync_config()
                 
-            # If the local file does not exist online, so we need to add it.
+            # If the local file does not exist online, we need to add it.
             elif not filename in self.synced_photos_by_filename_map or not self.synced_photos_by_filename_map[filename] in id_existing_photos_map:
                 photo_title = get_photo_title(filename, self.directory)
                 root, extension = os.path.splitext(filename)
@@ -361,33 +361,44 @@ class Album(object):
 
         return False
         
+def generate_default_config_file(filename):
+    f = open(conf_filename, "w")
+    yaml.dump({
+        "account": ["account@gmail.com", None], # Gmail Account, Token 
+        "photo_dir": os.path.expanduser("~/Pictures"), # The directory to synchronize with the picasaweb account
+        "include_files": ["*.jpg", "*.jpeg", "*.bmp", "*.gif", "*.png", "*.mov", "*.mpg"], # Files of these types will be considered for upload.
+        "exclude_dirs": [".DS_Store"], # Directory names in this list will be exluded
+        "delete_online_albums_not_local": False, # When this is true any existing online album that does not exist locally will be deleted
+        "never_delete_online_albums": ["Camera Roll"], # Online album names in this list will never be deleted.
+        "update_local_albums_already_online": False}, f) # This decides whether albums that have been uploaded previously will be updated.
+    
 def main(argv):
-    if socket.gethostname() == 'DiskStation':
-        token_filename = "/volume1/morten/.picasa-folder-sync-token-morten795"
-        photo_dir = "/volume1/photo"
-        exclude_dirs = ["*@eaDir*", "*#recycle*", "*.TemporaryItems*", "*Originals*"]
-        user_account = "morten795@gmail.com"
+    if len(argv) == 1:
+        config_filename = argv[0]
     else:
-        token_filename = "/Users/morten/.picasa-folder-sync-token-morten-picasa-test"
-        photo_dir = "/Users/morten/Pictures/Picasa"
-        exclude_dirs = ".DS_Store"
-        user_account = "morten.picasa.test@gmail.com"
-    include_files = ["*.jpg", "*.jpeg", "*.bmp", "*.gif", "*.png", "*.mov", "*.mpg"]
-    never_delete_albums = ["NEM ID", "Kamera Rulle"]
-    delete_online_albums_not_local = False
-    update_local_albums_already_online = False
+        config_filename = os.path.expanduser("~/.picasa-directory-sync-conf")
+    
+    with open(config_filename, "r") as config_file:
+        config = yaml.load(config_file)
+        user_account = config['account'][0]
+        token = config['account'][1]
+        photo_dir = config['photo_dir']
+        include_files = config['include_files']
+        exclude_dirs = config['exclude_dirs']
+        delete_online_albums_not_local = config['delete_online_albums_not_local']
+        never_delete_online_albums = config['never_delete_online_albums']
+        update_local_albums_already_online = config['update_local_albums_already_online']
     
     gd_client = gdata.photos.service.PhotosService()
     gd_client.ssl = False
     gd_client.email = user_account
-    if os.path.exists(token_filename):
-        with open(token_filename, "rb") as token_file:
-            token = pickle.load(token_file)
-            gd_client.SetOAuthToken(token)
+    if token:
+        gd_client.SetOAuthToken(token)
     else:
         if request_access(gd_client):
-            with open(token_filename, "wb") as token_file:
-                pickle.dump(gd_client.current_token, token_file)
+            config['account'][1] = gd_client.current_token
+            with open(config_filename, "w") as config_file:
+                yaml.dump(config, config_file)
         else:
             print 'Failed to request access'
             return
@@ -446,19 +457,41 @@ def main(argv):
                     # Album updated - break from inner loop
                     break 
                                        
+        # Delete albums online that no longer exist locally, if enabled.
         while delete_online_albums_not_local:
             try:                                       
-                # Delete albums online that no longer exist locally.
                 for album in id_to_online_album_map.values():
-                    if not album.title.text in never_delete_albums:
+                    if not album.title.text in never_delete_online_albums:
                         print "Deleting album %s" % album.title.text
-                        #gd_client.Delete(album)
-            except Exception, e:            
+                        gd_client.Delete(album)
+                        del id_to_online_album_map[album.gphoto_id.text]
+            except Exception, e:         
+                print "Exception occurred (%s) - sleeping for 2 minuttes before retrying." % str(e)   
                 time.sleep(120) # Sleep for 2 mins.
             else:
                 # Albums delete break from loop.
                 break
                 
+        # Delete empty online albums
+        online_albums = gd_client.GetUserFeed()
+        online_albums = [album for album in online_albums.entry]
+        while True:
+            try:
+                i = len(online_albums)
+                while i != 0:
+                    i -= 1
+                    online_album = online_albums[i]
+                    if int(online_album.numphotos.text) == 0 and not online_album.title.text in never_delete_online_albums:
+                        print "Deleting empty album: %s" % online_album.title.text
+                        gd_client.Delete(online_album)
+                        del online_albums[i]
+            except Exception, e:
+                print "Exception occurred (%s) - sleeping for 2 minuttes before retrying." % str(e)       
+                time.sleep(120) # Sleep for 2 mins.
+            else:
+                # Albums delete break from loop.
+                break
+            
         print "DONE!"   
     except gdata.photos.service.GooglePhotosException, e:
         if "Token invalid" in str(e):
@@ -468,4 +501,4 @@ def main(argv):
             raise
             
 if __name__ == '__main__':
-    main(sys.argv)
+    main(sys.argv[1:])
