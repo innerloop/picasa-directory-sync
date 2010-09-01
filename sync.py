@@ -205,7 +205,7 @@ class Album(object):
         
         # If no files then we set the album time to the current time.
         if len(self.file_data_list) == 0:
-            self.album_datetime = datetime.datetime.now
+            self.album_datetime = datetime.datetime.now()
     
     def _save_picasa_sync_config(self):
         with open(self.picasa_sync_config_filename, 'w') as f:
