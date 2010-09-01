@@ -370,6 +370,9 @@ def main(argv):
         user_account = "morten.picasa.test@gmail.com"
     include_files = ["*.jpg", "*.jpeg", "*.bmp", "*.gif", "*.png", "*.mov", "*.mpg"]
     never_delete_albums = ["NEM ID", "Kamera Rulle"]
+    delete_online_albums_not_local = False
+    update_local_albums_already_online = False
+    
     gd_client = gdata.photos.service.PhotosService()
     gd_client.ssl = False
     gd_client.email = user_account
@@ -421,7 +424,8 @@ def main(argv):
                     retry_count += 1                
                                      
                     # Update the online album from the local directory.
-                    album.update_online_album(gd_client)
+                    if not album.online_album or update_local_albums_already_online:
+                        album.update_online_album(gd_client)
 
                     # Remove the album from the existing online albums map. Then we
                     # can delete all remaining albums when sync is completed.
@@ -442,7 +446,7 @@ def main(argv):
                     # Album updated - break from inner loop
                     break 
                                        
-        while True:
+        while delete_online_albums_not_local:
             try:                                       
                 # Delete albums online that no longer exist locally.
                 for album in id_to_online_album_map.values():
