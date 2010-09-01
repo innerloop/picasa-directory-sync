@@ -369,7 +369,7 @@ def main(argv):
         exclude_dirs = ".DS_Store"
         user_account = "morten.picasa.test@gmail.com"
     include_files = ["*.jpg", "*.jpeg", "*.bmp", "*.gif", "*.png", "*.mov", "*.mpg"]
-    
+    never_delete_albums = ["NEM ID", "Kamera Rulle"]
     gd_client = gdata.photos.service.PhotosService()
     gd_client.ssl = False
     gd_client.email = user_account
@@ -446,9 +446,9 @@ def main(argv):
             try:                                       
                 # Delete albums online that no longer exist locally.
                 for album in id_to_online_album_map.values():
-                    if album.title.text != "Kamera Rulle":
+                    if not album.title.text in never_delete_albums:
                         print "Deleting album %s" % album.title.text
-                        gd_client.Delete(album)
+                        #gd_client.Delete(album)
             except Exception, e:            
                 time.sleep(120) # Sleep for 2 mins.
             else:
