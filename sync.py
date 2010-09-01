@@ -353,7 +353,7 @@ class Album(object):
         if len(self.file_data_list) == 0:
             self._load_file_data_list()
         
-        if len(self.file_data_list) == 0:
+        if len(self.file_data_list) > 0:
             self._create_or_update_online_album(ps_client)
             if self.online_album:
                 self._create_or_update_online_files(ps_client)
