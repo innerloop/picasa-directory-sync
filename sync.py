@@ -410,7 +410,7 @@ def main(argv):
         
         print "Getting local albums"
         local_albums = [local_album_title for local_album_title in os.listdir(photo_dir)]
-        local_albums.sort(key=str.lower)
+        local_albums.sort(key=str.lower, reverse=True)
         expr = re.compile("\[\d{4,4}-\d{2,2}-\d{2,2}\] (.+)")
         
         for local_album_title in local_albums:
