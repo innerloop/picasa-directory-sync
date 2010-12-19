@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 import os
 import sys
 import base64
@@ -29,25 +31,14 @@ class GlobDirectoryWalker:
         self.dir_exclude_pattern = dir_exclude_pattern
         self.files = []
         self.index = 0
-        
+
     def is_dir_excluded(self, fullname):
         if self.dir_exclude_pattern:
-            if isinstance(self.dir_exclude_pattern, basestring):
-                return fnmatch.fnmatch(fullname.upper(), self.dir_exclude_pattern.upper())
-            else:
-                for exclude_pattern in self.dir_exclude_pattern:
-                    if fnmatch.fnmatch(fullname.upper(), exclude_pattern.upper()):
-                        return True
+            return does_match_pattern(fullname, self.dir_exclude_pattern)
         return False 
         
     def is_file_included(self, filename):
-        if isinstance(self.include_pattern, basestring):
-            return fnmatch.fnmatch(filename.upper(), self.dir_exclude_pattern.upper())
-        else:
-            for pattern in self.include_pattern:
-                if fnmatch.fnmatch(filename.upper(), pattern.upper()):
-                    return True
-        return False 
+        return does_match_pattern(filename, self.include_pattern)
     
     def __getitem__(self, index):
         while 1:
@@ -103,13 +94,12 @@ def request_access(gd_client, domain="default"):
     else:
         return True
 
+def mustbelist(obj):
+    return obj if isinstance(obj, (list, tuple)) else [obj]
+
 def does_match_pattern(name, pattern):
-    if isinstance(pattern, basestring):
-        return fnmatch.fnmatch(name.upper(), pattern.upper())
-    else:
-        for p in pattern:
-            if fnmatch.fnmatch(name.upper(), p.upper()):
-                return True    
+    name = name.upper()
+    return any(fnmatch.fnmatch(name, p.upper()) for p in mustbelist(pattern))
 
 def get_photo_title(filename, album_path):
     if filename.find(album_path) == 0:
@@ -362,7 +352,7 @@ class Album(object):
         return False
         
 def generate_default_config_file(filename):
-    f = open(conf_filename, "w")
+    f = open(filename, "w")
     yaml.dump({
         "account": ["account@gmail.com", None], # Gmail Account, Token 
         "photo_dir": os.path.expanduser("~/Pictures"), # The directory to synchronize with the picasaweb account
@@ -377,6 +367,9 @@ def main(argv):
         config_filename = argv[0]
     else:
         config_filename = os.path.expanduser("~/.picasa-directory-sync-conf")
+
+    if not os.path.exists(config_filename):
+        generate_default_config_file(config_filename)
     
     with open(config_filename, "r") as config_file:
         config = yaml.load(config_file)
@@ -410,7 +403,7 @@ def main(argv):
         
         print "Getting local albums"
         local_albums = [local_album_title for local_album_title in os.listdir(photo_dir)]
-        local_albums.sort(key=str.lower, reverse=True)
+        local_albums.sort(key=lambda s: s.lower, reverse=True)
         expr = re.compile("\[\d{4,4}-\d{2,2}-\d{2,2}\] (.+)")
         
         for local_album_title in local_albums:
