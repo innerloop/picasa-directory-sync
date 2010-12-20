@@ -421,7 +421,7 @@ def main(argv):
             # Check if the album is prefixed with date.
             m = expr.match(local_album_title)
             if m != None:
-                local_album_title = m.group(1)              
+                local_album_title = m.group(1)
                     
             album = Album(directory, local_album_title, include_files, exclude_dirs)
             
