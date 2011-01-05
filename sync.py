@@ -403,7 +403,7 @@ def main(argv):
         
         print "Getting local albums"
         local_albums = [local_album_title for local_album_title in os.listdir(photo_dir)]
-        local_albums.sort(key=str.lower, reverse=True)
+        local_albums.sort(key=lambda s: s.lower(), reverse=True)
         expr = re.compile("\[\d{4,4}-\d{2,2}-\d{2,2}\] (.+)")
         
         for local_album_title in local_albums:
@@ -414,7 +414,7 @@ def main(argv):
             # Check if the album is prefixed with date.
             m = expr.match(local_album_title)
             if m != None:
-                local_album_title = m.group(1)
+                local_album_title = m.group(1)              
                     
             album = Album(directory, local_album_title, include_files, exclude_dirs)
             
