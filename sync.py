@@ -21,6 +21,9 @@ import gdata.docs.data
 import gdata.docs.client
 import gdata.docs.service
 
+import logging
+LOG = logging.getLogger(__name__)
+
 class GlobDirectoryWalker:
     # a forward iterator that traverses a directory tree
     #for file in GlobDirectoryWalker(".", "*.py"):
@@ -48,7 +51,7 @@ class GlobDirectoryWalker:
             except IndexError:
                 # pop next directory from stack
                 self.directory = self.stack.pop()
-                self.files = os.listdir(self.directory)
+                self.files = map(fs_unic, os.listdir(self.directory))
                 self.index = 0
             else:
                 # got a filename
@@ -97,6 +100,12 @@ def request_access(gd_client, domain="default"):
 def mustbelist(obj):
     return obj if isinstance(obj, (list, tuple)) else [obj]
 
+def unic(obj, encoding='utf8'):
+    return obj.decode(encoding) if isinstance(obj, str) else obj
+
+def fs_unic(obj, encoding=sys.getfilesystemencoding()):
+    return unic(obj, encoding=encoding)
+
 def does_match_pattern(name, pattern):
     name = name.upper()
     return any(fnmatch.fnmatch(name, p.upper()) for p in mustbelist(pattern))
@@ -107,7 +116,7 @@ def get_photo_title(filename, album_path):
         filename = filename.replace('/', '_')
         filename = filename.replace('\\', '_')
         
-    return filename
+    return fs_unic(filename)
 
 def md5_for_file(f, block_size=2**20):
     f.seek(0)
@@ -204,17 +213,18 @@ class Album(object):
     def _create_or_update_online_album(self, ps_client):
         if self.online_album:
             assert self.online_album.gphoto_id.text == self.synced_album_gphoto_id        
-            if self.online_album.title.text == self.title and self.online_album.timestamp.datetime() == self.album_datetime:
+            # LOG.debug('online.title=%r ? title=%r', self.online_album.title.text, self.title)
+            if unic(self.online_album.title.text) == self.title and self.online_album.timestamp.datetime() == self.album_datetime:
                 print "Album %s already exists and is up to date" % self.title
             else:
-                old_online_album_title = self.online_album.title.text
+                old_online_album_title = unic(self.online_album.title.text)
                 self.online_album.title.text = self.title
                 self.online_album.timestamp.text = str(int(time.mktime(self.album_datetime.timetuple())*1000))
                 ps_client.Put(self.online_album, self.online_album.GetEditLink().href, converter=gdata.photos.AlbumEntryFromString)
-                print "Existing album %s updated (title: %s, timestamp: %s)" % (old_online_album_title, self.title, self.album_datetime)
+                print u"Existing album %s updated (title: %s, timestamp: %s)" % (old_online_album_title, self.title, self.album_datetime)
                 self._save_picasa_sync_config()
         else:
-            print "Creating new album %s" % self.title
+            print u"Creating new album %s" % self.title
             timestamp = str(int(time.mktime(self.album_datetime.timetuple())*1000))
             self.online_album = ps_client.InsertAlbum(title=self.title, summary=None, location=None, access='private', commenting_enabled='true', timestamp=timestamp)
             self.synced_album_gphoto_id = self.online_album.gphoto_id.text
@@ -245,7 +255,8 @@ class Album(object):
         for gphoto_id, (filename, checksum) in self.synced_photos_by_id_map.iteritems():
             if checksum in checksum_to_filename_map and not checksum in duplicate_checksums:
                 if filename != checksum_to_filename_map[checksum]:
-                    rename_to_from_map[checksum_to_filename_map[checksum]] = filename
+                    if self.synced_photos_by_filename_map[filename] in id_existing_photos_map:
+                        rename_to_from_map[checksum_to_filename_map[checksum]] = filename
 
         # Now update or create the online version
         for file_data in self.file_data_list:
@@ -259,7 +270,7 @@ class Album(object):
                 gphoto_id = self.synced_photos_by_filename_map[rename_from_filename]
                 photo = id_existing_photos_map[gphoto_id]
                 photo.title.text = rename_to_title
-                print "Updating photo title from %s to %s" % (get_photo_title(rename_from_filename, self.directory), rename_to_title)
+                print u"Updating photo title from %s to %s" % (get_photo_title(rename_from_filename, self.directory), rename_to_title)
                 photo = ps_client.UpdatePhotoMetadata(photo)
                 
                 # Update local state
@@ -396,13 +407,16 @@ def main(argv):
             print 'Failed to request access'
             return
                 
+    import traceback
     try:
         print "Getting online albums"
         online_albums = gd_client.GetUserFeed()
         id_to_online_album_map = dict([(album.gphoto_id.text, album) for album in online_albums.entry])
         
         print "Getting local albums"
-        local_albums = [local_album_title for local_album_title in os.listdir(photo_dir)]
+        fsenc = sys.getfilesystemencoding()
+        local_albums = map(fs_unic, [local_album_title for local_album_title in os.listdir(photo_dir)])
+        # LOG.debug('local_albums: %r', local_albums)
         local_albums.sort(key=lambda s: s.lower(), reverse=True)
         expr = re.compile("\[\d{4,4}-\d{2,2}-\d{2,2}\] (.+)")
         
@@ -441,6 +455,7 @@ def main(argv):
                         raise
                     
                     if retry_count <= 10:
+                        traceback.print_exc()
                         print "Exception occurred (%s) - sleeping for 2 minuttes before retrying." % str(e)
                         time.sleep(120) # Sleep for 2 mins.
                     else:
@@ -494,4 +509,5 @@ def main(argv):
             raise
             
 if __name__ == '__main__':
+    logging.basicConfig(level=logging.DEBUG)
     main(sys.argv[1:])
