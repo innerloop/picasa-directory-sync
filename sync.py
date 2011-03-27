@@ -11,6 +11,7 @@ import datetime
 import time
 import socket
 import re
+import traceback
 
 import EXIF
 
@@ -393,6 +394,8 @@ def main(argv):
         never_delete_online_albums = config['never_delete_online_albums']
         update_local_albums_already_online = config['update_local_albums_already_online']
     
+    gdata.photos.service.SUPPORTED_UPLOAD_TYPES = ('bmp', 'jpeg', 'jpg', 'gif', 'png', 'mov', 'mpg', 'mpeg')
+    
     gd_client = gdata.photos.service.PhotosService()
     gd_client.ssl = False
     gd_client.email = user_account
@@ -407,7 +410,6 @@ def main(argv):
             print 'Failed to request access'
             return
                 
-    import traceback
     try:
         print "Getting online albums"
         online_albums = gd_client.GetUserFeed()
