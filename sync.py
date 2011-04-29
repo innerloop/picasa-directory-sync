@@ -184,10 +184,13 @@ class Album(object):
             
     def _load_file_data_list(self):
         self.album_datetime = datetime.datetime.max
-        self.file_data_list = []
+        file_data_list = []
+        movies = set()
         
         filenames = [filename for filename in GlobDirectoryWalker(self.directory, self.include_files, self.exclude_dirs)]
         for filename in filenames:
+            basename, extension = os.path.splitext(filename)
+            
             with open(filename) as file:
                 tags = EXIF.process_file(file, stop_tag='Image DateTime', details=False)
                 if 'Image DateTime' in tags:
@@ -207,8 +210,21 @@ class Album(object):
                 else:
                     checksum = md5_for_string(filename+unicode(file_size))
                 file_data = {'filename': filename, 'datetime': dt, 'checksum': checksum}
-                self.file_data_list.append(file_data)
+                file_data_list.append(file_data)
+                
+                # Maintain a set of all movies to filter out thumbnail images below.
+                if extension.lower() in ('.mov', '.mpg', '.mpeg'):
+                    movies.add(basename)
         
+        # Assume that thUmbnail images have the same filename as the movie, but an image extension.
+        self.file_data_list = []
+        for file_data in file_data_list:
+            basename, extension = os.path.splitext(file_data['filename'])
+            if extension.lower() not in ('.bmp', '.jpeg', '.jpg', '.gif', '.png') or basename not in movies:
+                self.file_data_list.append(file_data)
+            else:
+                print "Image assumed to be a movie thumbnail: " + file_data['filename'] + " - skipping!"
+
         # Make sure the list is sorted on datetime
         self.file_data_list.sort(lambda x, y: cmp(x['datetime'], y['datetime']))
         
