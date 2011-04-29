@@ -131,6 +131,8 @@ def md5_for_file(f, block_size=2**20):
 
 def md5_for_string(s):
     md5 = hashlib.md5()
+    if isinstance(s, unicode):
+        s = s.encode('utf-8')
     md5.update(s)
     return md5.hexdigest()
 
@@ -165,6 +167,13 @@ class Album(object):
                 print "opening .picasa-sync"
                 picasa_sync_config = yaml.load(f)
                 self.synced_photos_by_id_map = picasa_sync_config['photos_by_id_map']
+                
+                # Compensate for old bug where filenames were written down in str format instead of unicode
+                for gphoto_id, (filename, checksum) in self.synced_photos_by_id_map.iteritems():
+                    if isinstance(filename, str):
+                        print "Changing filename encoding for " + filename
+                        self.synced_photos_by_id_map[gphoto_id] = [fs_unic(filename), checksum]
+                        
                 self.synced_album_gphoto_id = picasa_sync_config['album_gphoto_id']
                 print "GPhoto ID: %s" % self.synced_album_gphoto_id
 
@@ -196,7 +205,7 @@ class Album(object):
                 if file_size < 100*(2**20):    
                     checksum = md5_for_file(file)
                 else:
-                    checksum = md5_for_string(filename+str(file_size))
+                    checksum = md5_for_string(filename+unicode(file_size))
                 file_data = {'filename': filename, 'datetime': dt, 'checksum': checksum}
                 self.file_data_list.append(file_data)
         
@@ -416,7 +425,6 @@ def main(argv):
         id_to_online_album_map = dict([(album.gphoto_id.text, album) for album in online_albums.entry])
         
         print "Getting local albums"
-        fsenc = sys.getfilesystemencoding()
         local_albums = map(fs_unic, [local_album_title for local_album_title in os.listdir(photo_dir)])
         # LOG.debug('local_albums: %r', local_albums)
         local_albums.sort(key=lambda s: s.lower(), reverse=True)
@@ -461,6 +469,7 @@ def main(argv):
                         print "Exception occurred (%s) - sleeping for 2 minuttes before retrying." % str(e)
                         time.sleep(120) # Sleep for 2 mins.
                     else:
+                        traceback.print_exc()
                         print "Maximum album retry count exceeded - aborting."
                         return              
                 else:
